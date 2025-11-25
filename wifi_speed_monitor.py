@@ -223,7 +223,7 @@ class PingMonitorApp:
         self.canvas.get_tk_widget().bind("<Button-3>", popup)
 
     # --- Mouse Interaction (Drag + Resize) ---
-   def _make_interaction_bindings(self, widget):
+    def _make_interaction_bindings(self, widget):
         # Bind to the whole window, not just the canvas
         self.root.bind("<Button-1>", self._on_mouse_down)
         self.root.bind("<B1-Motion>", self._on_mouse_drag)
@@ -346,5 +346,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
