@@ -170,6 +170,9 @@ class PingMonitorApp:
 
         # Draggable
         self._make_draggable(self.canvas.get_tk_widget())
+        # Allow resize from bottom-right corner
+        self._make_resizable(self.canvas.get_tk_widget())
+
 
         # Worker thread
         self.stop_event = threading.Event()
@@ -214,6 +217,23 @@ class PingMonitorApp:
             bg=BG, fg=FG
         )
         self.label_mbps.pack(pady=5)
+
+    def _make_resizable(self, widget):
+    widget.bind("<Button-1>", self._start_resize)
+    widget.bind("<B1-Motion>", self._do_resize)
+
+    def _start_resize(self, event):
+        self.resize_w = self.root.winfo_width()
+        self.resize_h = self.root.winfo_height()
+        self.start_x = event.x_root
+        self.start_y = event.y_root
+    
+    def _do_resize(self, event):
+        dx = event.x_root - self.start_x
+        dy = event.y_root - self.start_y
+        new_w = max(300, self.resize_w + dx)
+        new_h = max(220, self.resize_h + dy)
+        self.root.geometry(f"{new_w}x{new_h}")
 
     # --- Menu ---
     def _build_menu(self):
@@ -325,9 +345,16 @@ class PingMonitorApp:
 # ------------ MAIN -------------
 def main():
     root = tk.Tk()
+    root.attributes("-type", "dialog")  # Still low-profile, but supports alpha
+    root.attributes("-alpha", 0.9)     # Restore translucency
+    root.lower()                        # Keep behind apps
+    root.attributes("-topmost", False)  # Ensure it stays in the background
+
+
     app = PingMonitorApp(root)
     root.mainloop()
 
 
 if __name__ == "__main__":
     main()
+
