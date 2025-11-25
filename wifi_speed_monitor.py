@@ -335,17 +335,29 @@ class PingMonitorApp:
 def main():
     root = tk.Tk()
     root.overrideredirect(True)
-    root.attributes("-type", "utility")  # Best Linux translucency mode
-    root.attributes("-alpha", 0.90)      # Restore translucency
-    root.lower()                          # Keep behind apps
+
+    # Correct background-friendly window type for Linux Mint/Cinnamon
+    root.attributes("-type", "dock")
+
+    # Stay translucent
+    root.attributes("-alpha", 0.90)
+
+    # Push behind all normal windows
+    root.lower()
     root.attributes("-topmost", False)
 
+    # Create the app
     app = PingMonitorApp(root)
+
+    # Prevent accidental raising
+    def keep_back(event=None):
+        root.lower()
+
+    root.bind("<FocusIn>", keep_back)
+    root.bind("<Map>", keep_back)
+
     root.mainloop()
 
-
-if __name__ == "__main__":
-    main()
 
 
 
