@@ -5,13 +5,14 @@ Compact Vaporwave Wi-Fi Ping Monitor
 
 Features:
 - Ping every 10s (configurable)
-- Lightweight ~200 KB download to estimate Mbps
+- Lightweight ~200 KB HTTP download to estimate Mbps
 - Ping control chart only
 - Mbps displayed as text (no second graph)
 - Color-coded ping dots (green/yellow/red)
-- Red pings are logged to: ~/wifi_ping_alerts.csv
-- Frameless, translucent, draggable
+- Red pings logged to: ~/wifi_ping_alerts.csv
+- Frameless, translucent, draggable + bottom-right resizable
 - Right-click menu: Quit / Toggle Fullscreen
+- Stays behind real apps (desktop widget vibe)
 """
 
 import os
@@ -51,6 +52,9 @@ ACCENT_MEAN = "#fffb96"
 ACCENT_CL = "#ff71ce"
 GRID_COLOR = "#3a2b5b"
 
+# Resize margin
+RESIZE_MARGIN = 18
+
 
 # ------------- MEASUREMENTS -------------
 
@@ -68,7 +72,6 @@ def measure_ping_ms():
 
         for line in result.stdout.splitlines():
             if "time=" in line:
-                # Extract number after "time="
                 value = line.split("time=")[1].split()[0]
                 return float(value)
     except Exception:
@@ -93,9 +96,7 @@ def measure_download_mbps():
         if elapsed <= 0:
             return None
 
-        mbps = (total * 8 / elapsed) / 1_000_000
-        return mbps
-
+        return (total * 8 / elapsed) / 1_000_000
     except Exception:
         return None
 
@@ -160,19 +161,16 @@ class PingMonitorApp:
         self.mbps_value = None
 
         self.root.configure(bg=BG)
-        self.root.overrideredirect(True)
-        self.root.attributes("-alpha", 0.9)
+        self.root.overrideredirect(True)     # Frameless
+        self.root.attributes("-alpha", 0.90) # Translucent
+
+        self._drag_mode = None
 
         self._build_ui()
-
-        # Right-click menu
         self._build_menu()
 
-        # Draggable
-        self._make_draggable(self.canvas.get_tk_widget())
-        # Allow resize from bottom-right corner
-        self._make_resizable(self.canvas.get_tk_widget())
-
+        # Bind mouse events for drag & resize
+        self._make_interaction_bindings(self.canvas.get_tk_widget())
 
         # Worker thread
         self.stop_event = threading.Event()
@@ -192,8 +190,8 @@ class PingMonitorApp:
         self.ax.set_title("Ping (ms)", color=FG, fontsize=10)
         self.ax.grid(True, color=GRID_COLOR, linestyle="--", alpha=0.4)
         self.ax.tick_params(colors=FG)
-        for spine in self.ax.spines.values():
-            spine.set_color(FG)
+        for s in self.ax.spines.values():
+            s.set_color(FG)
 
         self.line, = self.ax.plot([], [], color=ACCENT_PING, alpha=0.6)
         self.scatter = self.ax.scatter([], [])
@@ -218,27 +216,11 @@ class PingMonitorApp:
         )
         self.label_mbps.pack(pady=5)
 
-    def _make_resizable(self, widget):
-    widget.bind("<Button-1>", self._start_resize)
-    widget.bind("<B1-Motion>", self._do_resize)
-
-    def _start_resize(self, event):
-        self.resize_w = self.root.winfo_width()
-        self.resize_h = self.root.winfo_height()
-        self.start_x = event.x_root
-        self.start_y = event.y_root
-    
-    def _do_resize(self, event):
-        dx = event.x_root - self.start_x
-        dy = event.y_root - self.start_y
-        new_w = max(300, self.resize_w + dx)
-        new_h = max(220, self.resize_h + dy)
-        self.root.geometry(f"{new_w}x{new_h}")
-
-    # --- Menu ---
+    # --- Right-click menu ---
     def _build_menu(self):
         self.menu = tk.Menu(self.root, tearoff=0, bg=BG, fg=FG)
-        self.menu.add_command(label="Toggle Fullscreen", command=self.toggle_fullscreen)
+        self.menu.add_command(label="Toggle Fullscreen",
+                              command=self.toggle_fullscreen)
         self.menu.add_separator()
         self.menu.add_command(label="Quit", command=self.quit)
 
@@ -248,25 +230,42 @@ class PingMonitorApp:
         self.root.bind("<Button-3>", popup)
         self.canvas.get_tk_widget().bind("<Button-3>", popup)
 
-    # --- Dragging ---
-    def _make_draggable(self, widget):
-        widget.bind("<Button-1>", self.start_drag)
-        widget.bind("<B1-Motion>", self.do_drag)
+    # --- Mouse Interaction (Drag + Resize) ---
+    def _make_interaction_bindings(self, widget):
+        widget.bind("<Button-1>", self._on_mouse_down)
+        widget.bind("<B1-Motion>", self._on_mouse_drag)
 
-    def start_drag(self, event):
-        self.drag_x = event.x_root
-        self.drag_y = event.y_root
+    def _on_mouse_down(self, event):
+        win_w = self.root.winfo_width()
+        win_h = self.root.winfo_height()
 
-    def do_drag(self, event):
-        dx = event.x_root - self.drag_x
-        dy = event.y_root - self.drag_y
+        # Resize zone (bottom-right corner)
+        if event.x >= win_w - RESIZE_MARGIN and event.y >= win_h - RESIZE_MARGIN:
+            self._drag_mode = "resize"
+            self.start_w = win_w
+            self.start_h = win_h
+        else:
+            self._drag_mode = "move"
 
-        x = self.root.winfo_x() + dx
-        y = self.root.winfo_y() + dy
-        self.root.geometry(f"+{x}+{y}")
+        self.start_x = event.x_root
+        self.start_y = event.y_root
 
-        self.drag_x = event.x_root
-        self.drag_y = event.y_root
+    def _on_mouse_drag(self, event):
+        dx = event.x_root - self.start_x
+        dy = event.y_root - self.start_y
+
+        if self._drag_mode == "move":
+            new_x = self.root.winfo_x() + dx
+            new_y = self.root.winfo_y() + dy
+            self.root.geometry(f"+{new_x}+{new_y}")
+
+        elif self._drag_mode == "resize":
+            new_w = max(300, self.start_w + dx)
+            new_h = max(220, self.start_h + dy)
+            self.root.geometry(f"{new_w}x{new_h}")
+
+        self.start_x = event.x_root
+        self.start_y = event.y_root
 
     # --- Fullscreen ---
     def toggle_fullscreen(self):
@@ -291,7 +290,6 @@ class PingMonitorApp:
             self.data.append((ts, ping_ms, mbps))
             self.mbps_value = mbps
 
-            # Log if ping is red
             if ping_ms is not None and ping_ms > WARN_PING:
                 log_red_ping(ts, ping_ms, mbps)
 
@@ -345,11 +343,11 @@ class PingMonitorApp:
 # ------------ MAIN -------------
 def main():
     root = tk.Tk()
-    root.attributes("-type", "dialog")  # Still low-profile, but supports alpha
-    root.attributes("-alpha", 0.9)     # Restore translucency
-    root.lower()                        # Keep behind apps
-    root.attributes("-topmost", False)  # Ensure it stays in the background
-
+    root.overrideredirect(True)
+    root.attributes("-type", "utility")  # Best Linux translucency mode
+    root.attributes("-alpha", 0.90)      # Restore translucency
+    root.lower()                          # Keep behind apps
+    root.attributes("-topmost", False)
 
     app = PingMonitorApp(root)
     root.mainloop()
@@ -357,4 +355,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
