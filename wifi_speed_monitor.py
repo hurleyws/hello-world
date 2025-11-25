@@ -207,14 +207,6 @@ class PingMonitorApp:
         self.canvas = FigureCanvasTkAgg(fig, master=self.root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # Mbps text
-        self.label_mbps = tk.Label(
-            self.root,
-            text="Mbps: …",
-            font=("JetBrains Mono", 12, "bold"),
-            bg=BG, fg=FG
-        )
-        self.label_mbps.pack(pady=5)
 
     # --- Right-click menu ---
     def _build_menu(self):
@@ -231,14 +223,16 @@ class PingMonitorApp:
         self.canvas.get_tk_widget().bind("<Button-3>", popup)
 
     # --- Mouse Interaction (Drag + Resize) ---
-    def _make_interaction_bindings(self, widget):
-        widget.bind("<Button-1>", self._on_mouse_down)
-        widget.bind("<B1-Motion>", self._on_mouse_drag)
+   def _make_interaction_bindings(self, widget):
+    # Bind to the whole window, not just the canvas
+    self.root.bind("<Button-1>", self._on_mouse_down)
+    self.root.bind("<B1-Motion>", self._on_mouse_drag)
+    self.root.bind("<ButtonRelease-1>", self._on_mouse_up)
 
     def _on_mouse_down(self, event):
         win_w = self.root.winfo_width()
         win_h = self.root.winfo_height()
-
+    
         # Resize zone (bottom-right corner)
         if event.x >= win_w - RESIZE_MARGIN and event.y >= win_h - RESIZE_MARGIN:
             self._drag_mode = "resize"
@@ -246,26 +240,29 @@ class PingMonitorApp:
             self.start_h = win_h
         else:
             self._drag_mode = "move"
-
+    
         self.start_x = event.x_root
         self.start_y = event.y_root
-
+    
     def _on_mouse_drag(self, event):
         dx = event.x_root - self.start_x
         dy = event.y_root - self.start_y
-
+    
         if self._drag_mode == "move":
             new_x = self.root.winfo_x() + dx
             new_y = self.root.winfo_y() + dy
             self.root.geometry(f"+{new_x}+{new_y}")
-
+    
         elif self._drag_mode == "resize":
             new_w = max(300, self.start_w + dx)
             new_h = max(220, self.start_h + dy)
             self.root.geometry(f"{new_w}x{new_h}")
-
+    
         self.start_x = event.x_root
         self.start_y = event.y_root
+    
+    def _on_mouse_up(self, event):
+        self._drag_mode = None
 
     # --- Fullscreen ---
     def toggle_fullscreen(self):
@@ -288,7 +285,6 @@ class PingMonitorApp:
             mbps = measure_download_mbps()
 
             self.data.append((ts, ping_ms, mbps))
-            self.mbps_value = mbps
 
             if ping_ms is not None and ping_ms > WARN_PING:
                 log_red_ping(ts, ping_ms, mbps)
@@ -330,11 +326,6 @@ class PingMonitorApp:
 
             self.ax.set_ylim(max(0, ymin * 0.8), ymax * 1.2)
 
-        # Update Mbps text
-        if self.mbps_value is not None:
-            self.label_mbps.config(text=f"Mbps: {self.mbps_value:.2f}")
-        else:
-            self.label_mbps.config(text="Mbps: n/a")
 
         self.canvas.draw_idle()
         self.root.after(1500, self.update_plot)
@@ -355,3 +346,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
