@@ -331,35 +331,38 @@ class PingMonitorApp:
         self.root.after(1500, self.update_plot)
 
 
-# ------------ MAIN -------------
 def main():
     root = tk.Tk()
     root.overrideredirect(True)
-
-    # Correct background-friendly window type for Linux Mint/Cinnamon
     root.attributes("-type", "dock")
-
-    # Stay translucent
     root.attributes("-alpha", 0.90)
-
-    # Push behind all normal windows
     root.lower()
     root.attributes("-topmost", False)
 
-    # Create the app
-    app = PingMonitorApp(root)
+    root.title("Ping Monitor")
+    root.update_idletasks()
 
-    # Prevent accidental raising
+    # Apply EWMH hints using wmctrl
+    os.system('wmctrl -r "Ping Monitor" -b add,below')
+    os.system('wmctrl -r "Ping Monitor" -b add,sticky')
+    os.system('wmctrl -r "Ping Monitor" -b add,skip_taskbar')
+    os.system('wmctrl -r "Ping Monitor" -b add,skip_pager')
+
+    # Keep behind if something tries to raise it
     def keep_back(event=None):
         root.lower()
+        os.system('wmctrl -r "Ping Monitor" -b add,below')
 
     root.bind("<FocusIn>", keep_back)
     root.bind("<Map>", keep_back)
 
+    app = PingMonitorApp(root)
     root.mainloop()
+
 
 if __name__ == "__main__": 
     main()
+
 
 
 
