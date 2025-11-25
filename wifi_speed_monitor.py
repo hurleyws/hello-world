@@ -334,34 +334,32 @@ class PingMonitorApp:
 def main():
     root = tk.Tk()
     root.overrideredirect(True)
-    root.attributes("-type", "dock")
     root.attributes("-alpha", 0.90)
+
+    # Regular window setup
     root.lower()
     root.attributes("-topmost", False)
 
-    root.title("Ping Monitor")
-    root.update_idletasks()
-
-    # Apply EWMH hints using wmctrl
-    os.system('wmctrl -r "Ping Monitor" -b add,below')
-    os.system('wmctrl -r "Ping Monitor" -b add,sticky')
-    os.system('wmctrl -r "Ping Monitor" -b add,skip_taskbar')
-    os.system('wmctrl -r "Ping Monitor" -b add,skip_pager')
-
-    # Keep behind if something tries to raise it
-    def keep_back(event=None):
-        root.lower()
-        os.system('wmctrl -r "Ping Monitor" -b add,below')
-
-    root.bind("<FocusIn>", keep_back)
-    root.bind("<Map>", keep_back)
-
+    # Build UI
     app = PingMonitorApp(root)
+
+    # Force true desktop behavior (Cinnamon-compatible)
+    root.update_idletasks()
+    window_id = root.winfo_id()
+
+    # Set window type to DESKTOP
+    os.system(f"xprop -id {window_id} -f _NET_WM_WINDOW_TYPE 32as -set _NET_WM_WINDOW_TYPE _NET_WM_WINDOW_TYPE_DESKTOP")
+
+    # Force always-below
+    os.system(f"xprop -id {window_id} -f _NET_WM_STATE 32as -set _NET_WM_STATE _NET_WM_STATE_BELOW")
+
     root.mainloop()
+
 
 
 if __name__ == "__main__": 
     main()
+
 
 
 
