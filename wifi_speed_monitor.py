@@ -224,10 +224,10 @@ class PingMonitorApp:
 
     # --- Mouse Interaction (Drag + Resize) ---
    def _make_interaction_bindings(self, widget):
-    # Bind to the whole window, not just the canvas
-    self.root.bind("<Button-1>", self._on_mouse_down)
-    self.root.bind("<B1-Motion>", self._on_mouse_drag)
-    self.root.bind("<ButtonRelease-1>", self._on_mouse_up)
+        # Bind to the whole window, not just the canvas
+        self.root.bind("<Button-1>", self._on_mouse_down)
+        self.root.bind("<B1-Motion>", self._on_mouse_drag)
+        self.root.bind("<ButtonRelease-1>", self._on_mouse_up)
 
     def _on_mouse_down(self, event):
         win_w = self.root.winfo_width()
@@ -346,4 +346,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
