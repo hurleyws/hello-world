@@ -18,9 +18,12 @@ TAKEOUT_DIR = Path(r"E:")
 WORK_DIR = Path(r"C:\Users\hurle\google_icloud\PhotoTransfer")
 EXIFTOOL = Path(r"C:\Users\hurle\google_icloud\exiftool-13.43_64\exiftool.exe")
 
+# FFmpeg Path (Updated)
+FFMPEG_EXE = Path(r"C:\Users\hurle\google_icloud\ffmpeg-2025-12-22-git-c50e5c7778-essentials_build\bin\ffmpeg.exe")
+
 IMPORT_READY = WORK_DIR / "import_ready"
 META_DIR = WORK_DIR / "_meta"
-MEDIA_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".mov", ".mp4", ".gif"}
+MEDIA_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".mov", ".mp4", ".gif", ".avi", ".3gp", ".m4v", ".mpg", ".flv", ".wmv"}
 
 IMPORT_READY.mkdir(parents=True, exist_ok=True)
 META_DIR.mkdir(parents=True, exist_ok=True)
@@ -81,15 +84,11 @@ def find_matching_media(title, folder):
     return None
 
 def get_internal_date(file_path):
-    """
-    Tries to read the existing DateTimeOriginal from the file itself.
-    """
     cmd = [str(EXIFTOOL), "-DateTimeOriginal", "-s3", str(file_path)]
     res = run_exiftool(cmd)
     if res.returncode == 0 and res.stdout.strip():
         return res.stdout.strip()
     
-    # Try CreateDate if DateTimeOriginal failed (common for videos)
     cmd = [str(EXIFTOOL), "-CreateDate", "-s3", str(file_path)]
     res = run_exiftool(cmd)
     if res.returncode == 0 and res.stdout.strip():
@@ -97,26 +96,83 @@ def get_internal_date(file_path):
     return None
 
 def get_year_from_folder(file_path):
-    """
-    Checks the parent folder name for a 4-digit year (19xx or 20xx).
-    Returns "YYYY:01:01 12:00:00" if found.
-    """
     parent_name = file_path.parent.name
-    # Regex looks for 19xx or 20xx
     match = re.search(r"(?:19|20)\d{2}", parent_name)
     if match:
         year = match.group(0)
         return f"{year}:01:01 12:00:00"
     return None
 
+# --- NEW: MEDIA FIXING FUNCTIONS ---
+
+def fix_video(input_path):
+    """
+    Remuxes video to MP4 container to ensure iCloud compatibility.
+    Uses 'copy' codec to preserve exact original quality/colors.
+    """
+    output_path = input_path.with_suffix(".mp4")
+    if output_path == input_path:
+        # If already MP4, rename temp to avoid collision
+        output_path = input_path.with_stem(input_path.stem + "_fixed")
+
+    # Command: Copy streams, move flags to start, output as MP4
+    cmd = [
+        str(FFMPEG_EXE), "-y",
+        "-i", str(input_path),
+        "-c", "copy",
+        "-movflags", "+faststart",
+        "-f", "mp4",
+        str(output_path)
+    ]
+    
+    res = subprocess.run(cmd, capture_output=True)
+
+    if res.returncode == 0:
+        # Success! Delete original and return new path
+        try:
+            input_path.unlink()
+            if output_path.name != input_path.with_suffix(".mp4").name:
+                 output_path.rename(input_path.with_suffix(".mp4"))
+            else:
+                 # If we renamed it _fixed, we might want to keep it or rename back
+                 # For simplicity, we just return the output path
+                 pass
+            return input_path.with_suffix(".mp4")
+        except OSError:
+            pass
+            return output_path
+    
+    # If failed, return original path so we don't lose the file
+    return input_path
+
+def fix_png(input_path):
+    """Converts PNG to JPG."""
+    try:
+        output_path = input_path.with_suffix(".jpg")
+        with Image.open(input_path) as img:
+            rgb_im = img.convert('RGB')
+            rgb_im.save(output_path, quality=95)
+        input_path.unlink()
+        return output_path
+    except Exception:
+        return input_path
+
+def process_media_compatibility(file_path):
+    """Wrapper to check file type and fix if needed."""
+    ext = file_path.suffix.lower()
+    
+    if ext == ".png":
+        return fix_png(file_path)
+    
+    # List of video containers that usually need repackaging for iCloud
+    if ext in {".mov", ".avi", ".3gp", ".m4v", ".flv", ".wmv", ".mpg"}:
+        return fix_video(file_path)
+        
+    return file_path
+
+# -----------------------------------
+
 def apply_timestamp(target_path, ts_epoch, source_file_path):
-    """
-    Applies timestamp. 
-    Priority 1: JSON Timestamp
-    Priority 2: Existing Internal Metadata
-    Priority 3: Folder Name Year (The "Sherlock" fallback)
-    Priority 4: File Modification Time (Last resort)
-    """
     ts_exif = None
     
     # PRIORITY 1: JSON
@@ -139,7 +195,7 @@ def apply_timestamp(target_path, ts_epoch, source_file_path):
         dt = datetime.datetime.fromtimestamp(stat.st_mtime)
         ts_exif = dt.strftime("%Y:%m:%d %H:%M:%S")
 
-    # Apply the determined date
+    # Apply
     ext = target_path.suffix.lower()
     base = [str(EXIFTOOL), "-m", "-overwrite_original"]
 
@@ -155,7 +211,6 @@ def apply_timestamp(target_path, ts_epoch, source_file_path):
     
     run_exiftool(base + tags + [str(target_path)])
     
-    # Fix file system dates
     fs_ts = ts_exif.replace(":", "-", 2)
     run_exiftool([str(EXIFTOOL), "-m", f"-FileModifyDate={fs_ts}", f"-FileCreateDate={fs_ts}", "-overwrite_original", str(target_path)])
 
@@ -229,6 +284,9 @@ for idx, json_file in enumerate(json_files, start=1):
         target_path = IMPORT_READY / media_file.name
         if not target_path.exists():
             shutil.copy2(media_file, target_path)
+            
+            # --- VIDEO/PNG FIXING (Phase 1) ---
+            target_path = process_media_compatibility(target_path)
 
     ts = data.get("photoTakenTime", {}).get("timestamp") or data.get("creationTime", {}).get("timestamp")
     apply_timestamp(target_path, ts, media_file)
@@ -246,11 +304,16 @@ for zp in zips_to_process:
             if f not in processed_files:
                 orphan_count += 1
                 
-                # --- NEW PROGRESS INDICATOR ---
                 print(f"  🦅 Rescuing orphan: {f.name}")
                 
                 target_path = IMPORT_READY / f.name
-                if target_path.exists(): continue
+                
+                # Check for existing fixed versions (mp4/jpg)
+                possible_fixed_mp4 = IMPORT_READY / f.with_suffix(".mp4").name
+                possible_fixed_jpg = IMPORT_READY / f.with_suffix(".jpg").name
+                
+                if target_path.exists() or possible_fixed_mp4.exists() or possible_fixed_jpg.exists():
+                     continue
 
                 if f.suffix.lower() == ".heic":
                     target_path = IMPORT_READY / f"{f.stem}.jpg"
@@ -261,6 +324,9 @@ for zp in zips_to_process:
                         except: continue
                 else:
                     shutil.copy2(f, target_path)
+                    
+                    # --- VIDEO/PNG FIXING (Phase 2) ---
+                    target_path = process_media_compatibility(target_path)
                 
                 apply_timestamp(target_path, None, f)
 
