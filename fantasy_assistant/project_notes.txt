@@ -1,0 +1,33 @@
+FANTASY FOOTBALL ASSISTANT - PROJECT LOG
+Last Updated: 2025-12-28 16:47
+
+------------------------------------------------------------------
+WHAT WE BUILT SO FAR
+------------------------------------------------------------------
+1. fantasy_advisor.py (The "Bad News" Bot)
+   - Function: Scrapes LIVE injury data from CBS Sports.
+   - Logic: Matches injured players to 2024 Roster Database.
+   - Output: Reports who is OUT/IR and finds the "Next Man Up" (Depth Chart Rank +1).
+   - Fixes: Handles hidden headers and messy name formats (e.g. "B. GillikinBlake Gillikin").
+
+2. heat_check.py (The "Good News" Bot)
+   - Function: Scrapes WEEKLY game logs from FantasyPros.
+   - Logic: Calculates 'Recent Avg' (Last 4 wks) vs 'Baseline Avg' (Season).
+   - Output: Lists players scoring significantly higher (+2.0 pts/game) recently.
+   - Fixes: Calculates averages manually to avoid the "Same Numbers" bug on summary pages.
+
+------------------------------------------------------------------
+FUTURE ROADMAP & LOGIC CHECKS
+------------------------------------------------------------------
+1. WR LOGIC (THE "TARGET SHARE" PROBLEM)
+   - Current logic: Direct depth chart backup.
+   - Improved Logic: WR injuries disperse targets to other starters (WR2, TE), not just the bench backup.
+   - Goal: Build a "Target Share" report or "Usage Vacuum" report.
+
+2. QB/TE LOGIC
+   - QB Backup: Irrelevant for pickup (in 1QB leagues).
+   - Real Impact: Downgrades the WRs attached to that QB.
+   - Goal: "Downgrade Alert" -> If QB is out, flag his WRs as risky.
+
+3. "HEATING UP" REPORT
+   - Apply the heat check to all positions (QB/TE included) to find streamers.
